@@ -1,12 +1,14 @@
 var express = require('express');
 var express_graphql = require('express-graphql');
 var {buildSchema} = require('graphql');
+var axios = require('axios');
 
 // GraphQL Schema
 var schema = buildSchema(`
     type Query {
         course(id: Int!): Course
         courses(topic: String): [Course]
+        transaction(hash: String): Transaction
     }
     type Mutation {
         updateCourseTopic(id: Int!, topic: String!): Course
@@ -18,6 +20,28 @@ var schema = buildSchema(`
         description: String
         topic: String
         url: String
+    }
+    
+    type ParentBlock { 
+      hash: String
+      height: Int
+      time: Int
+      canonical: Boolean
+    }
+
+    type Transaction { 
+      hash: String
+      memo: String
+      size: Int
+      valueBalance: Int
+      digest: String
+      transactionProof: String
+      localDataRoot: String
+      programCommitment: String
+      parentBlock: ParentBlock
+      signatures: [String]
+      oldSerialNumbers: [String]
+      newCommitments: [String]
     }
 `);
 
@@ -48,14 +72,15 @@ var coursesData = [
     }
 ]
 
-var getCourse = function(args) {
+var getCourse = function (args) {
+    console.log("here")
     var id = args.id;
     return coursesData.filter(course => {
         return course.id == id;
     })[0];
 }
 
-var getCourses = function(args) {
+var getCourses = function (args) {
     if (args.topic) {
         var topic = args.topic;
         return coursesData.filter(course => course.topic === topic);
@@ -64,7 +89,7 @@ var getCourses = function(args) {
     }
 }
 
-var updateCourseTopic = function({id, topic}) {
+var updateCourseTopic = function ({id, topic}) {
     coursesData.map(course => {
         if (course.id === id) {
             course.topic = topic;
@@ -74,10 +99,37 @@ var updateCourseTopic = function({id, topic}) {
     return coursesData.filter(course => course.id === id)[0];
 }
 
+var getTransactions = async function (args) {
+
+    var test = null;
+    var hash = args.hash;
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'bearer YjEzNDY0NDctYTBhOS00OGMyLWE2YzMtOTA4ZjA4ZmYyNDk5'
+    }
+    var payload = {"hash": `${hash}`}
+
+    await axios.post("https://api.aleo.network/transaction/getbyhash", payload, {
+        headers: headers
+    })
+        .then(res => {
+            console.log("transaction api response:", res.data.result)
+            test = res.data.result
+        })
+        .catch(err => {
+            console.log(err)
+            return err
+        })
+
+    return test
+}
+
 // Root resolver
 var root = {
     course: getCourse,
     courses: getCourses,
+    // this should be same has whats defined in query
+    transaction: getTransactions,
     updateCourseTopic: updateCourseTopic
 };
 
