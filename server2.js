@@ -2,17 +2,28 @@ var express = require('express');
 var express_graphql = require('express-graphql');
 var {buildSchema} = require('graphql');
 var axios = require('axios');
+const API_URL = "https://api.aleo.network"
+const AUTH_TOKEN = "YjEzNDY0NDctYTBhOS00OGMyLWE2YzMtOTA4ZjA4ZmYyNDk5"
 
+//get best --> het heifght range --> blocks
+//for all the blocks transactions --> get transaction by batch
 // GraphQL Schema
 var schema = buildSchema(`
     type Query {
         course(id: Int!): Course
         courses(topic: String): [Course]
         transaction(hash: String): Transaction
+        block(height: Int!): Block
+        searchGetType(query: String): SearchGetType
     }
     type Mutation {
         updateCourseTopic(id: Int!, topic: String!): Course
     }
+    
+    type SearchGetType {
+        type: String
+    }
+    
     type Course {
         id: Int
         title: String
@@ -43,6 +54,19 @@ var schema = buildSchema(`
       oldSerialNumbers: [String]
       newCommitments: [String]
     }
+    
+    type Block { hash: String
+  height: Int
+  merkleRoot: String
+  pedersenMerkleRootHash: String
+  time: Int
+  nonce: Int
+  previousBlockHash: String
+  size: Int
+  difficultyTarget: Int
+  canonical: Boolean
+  proof: String
+  transactions: [String ] }
 `);
 
 var coursesData = [
@@ -99,29 +123,83 @@ var updateCourseTopic = function ({id, topic}) {
     return coursesData.filter(course => course.id === id)[0];
 }
 
-var getTransactions = async function (args) {
-
-    var test = null;
+var getTransaction = async function (args) {
+    var ans = null;
     var hash = args.hash;
     const headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'bearer YjEzNDY0NDctYTBhOS00OGMyLWE2YzMtOTA4ZjA4ZmYyNDk5'
+        'Authorization': `bearer ${AUTH_TOKEN}`
     }
     var payload = {"hash": `${hash}`}
 
-    await axios.post("https://api.aleo.network/transaction/getbyhash", payload, {
+    await axios.post(`${API_URL}/transaction/getbyhash`, payload, {
         headers: headers
     })
         .then(res => {
             console.log("transaction api response:", res.data.result)
-            test = res.data.result
+            ans = res.data.result
         })
         .catch(err => {
             console.log(err)
-            return err
+            return null
         })
 
-    return test
+    return ans
+}
+
+var getBlock = async function (args) {
+
+    var ans = null;
+    var height = args.height;
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `bearer ${AUTH_TOKEN}`
+    }
+    var payload = {"height": height}
+
+    await axios.post(`${API_URL}/block/getbyheight`, payload, {
+        headers: headers
+    })
+        .then(res => {
+            console.log("block api response:", res.data.result)
+            ans = res.data.result
+        })
+        .catch(err => {
+            console.log(err)
+            return null
+        })
+
+    return ans
+}
+
+//todo: add search by block hash
+var getSearchType = async function (args) {
+    var query = args.query;
+
+
+    height = parseInt(query);
+    hash = query;
+
+    var combinedArgs = {
+        height: height,
+        hash: hash
+    }
+
+    console.log("combinedArgs", combinedArgs)
+
+    if (Number.isInteger(query)) {
+        block = await getBlock(combinedArgs);
+        console.log("block: ", block)
+        if (block !== null) {
+            return {type: "Block"}
+        }
+    }
+    transaction = await getTransaction(combinedArgs);
+    console.log("transaction: ", transaction)
+    if (transaction !== null) {
+        return {type: "Transaction"}
+    }
+    return {type: "Error"}
 }
 
 // Root resolver
@@ -129,7 +207,9 @@ var root = {
     course: getCourse,
     courses: getCourses,
     // this should be same has whats defined in query
-    transaction: getTransactions,
+    transaction: getTransaction,
+    block: getBlock,
+    searchGetType: getSearchType,
     updateCourseTopic: updateCourseTopic
 };
 
